@@ -44,9 +44,7 @@ http://localhost:5000
 
 ## 🔑 Credenciales
 
-| Usuario | Contraseña |
-|---------|-----------|
-| `admin` | `admin123` |
+Las credenciales se configuran mediante variables de entorno. En producción, define `SECRET_KEY` y la base de datos con `DATABASE_URL`.
 
 ## 📁 Estructura del Proyecto
 
