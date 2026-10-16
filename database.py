@@ -112,6 +112,25 @@ class Adjunto(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class Tienda(db.Model):
+    """
+    Catálogo de tiendas (equivalente a Hoja2 del Excel).
+    Se usa para enriquecer automáticamente las solicitudes entrantes.
+    """
+    __tablename__ = "tiendas"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(200), nullable=False, index=True)
+    co = db.Column(db.String(100), nullable=True)
+    ciudad = db.Column(db.String(100), nullable=True)
+    concepto = db.Column(db.String(200), nullable=True)
+    correo_tienda = db.Column(db.String(200), nullable=True)
+    direccion_tienda = db.Column(db.String(500), nullable=True)
+
+    def __repr__(self):
+        return f"<Tienda {self.nombre}>"
+
+
 def init_db(app):
     """Inicializa la base de datos y crea las tablas."""
     db.init_app(app)

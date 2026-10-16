@@ -26,7 +26,7 @@ try:
 except ImportError:
     pass
 
-from database import db, init_db, User, Solicitud, HistorialEstado, Adjunto
+from database import db, init_db, User, Solicitud, HistorialEstado, Adjunto, Tienda
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -408,6 +408,35 @@ def api_ingest():
         nombre_respondente=data.get("name"),
         estado="CREADO",
     )
+
+    # ---------------------------------------------------------------
+    # Enriquecimiento automático desde catálogo de tiendas
+    # ---------------------------------------------------------------
+    tienda_nombre = data.get("tienda")
+    if tienda_nombre:
+        # Buscar por nombre exacto primero, luego por coincidencia parcial
+        tienda_cat = Tienda.query.filter_by(nombre=tienda_nombre.strip()).first()
+        if not tienda_cat:
+            # Búsqueda flexible: ignorar espacios extra
+            tienda_cat = Tienda.query.filter(
+                db.func.trim(Tienda.nombre) == db.func.trim(tienda_nombre)
+            ).first()
+
+        if tienda_cat:
+            # Completar campos solo si vienen vacíos desde Forms
+            if not solicitud.co:
+                solicitud.co = tienda_cat.co
+            if not solicitud.ciudad:
+                solicitud.ciudad = tienda_cat.ciudad
+            if not solicitud.concepto:
+                solicitud.concepto = tienda_cat.concepto
+            if not solicitud.correo_tienda:
+                solicitud.correo_tienda = tienda_cat.correo_tienda
+            if not solicitud.direccion_tienda:
+                solicitud.direccion_tienda = tienda_cat.direccion_tienda
+            logger.info(f"Tienda enriquecida desde catálogo: {tienda_nombre}")
+        else:
+            logger.warning(f"Tienda no encontrada en catálogo: {tienda_nombre}")
 
     # Fechas
     start_time = data.get("start_time")
