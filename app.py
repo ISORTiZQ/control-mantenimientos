@@ -44,9 +44,9 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 # En producción: PostgreSQL vía DATABASE_URL
 database_url = os.environ.get("DATABASE_URL", "")
 if database_url:
-    # PostgreSQL: asegurar que use psycopg2 como driver
+    # PostgreSQL: usar psycopg3 como driver
     if database_url.startswith("postgresql://"):
-        database_url = database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 else:
     # SQLite local para desarrollo
