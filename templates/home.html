@@ -362,14 +362,19 @@
                     </div>
                 </div>
 
-                <!-- Histórico de Cierre (visible cuando estado es FINALIZADO) -->
+                <!-- Histórico / Tiempos del Caso (visible en todos los estados) -->
                 <div id="detail-cierre-section" style="display:none;">
                     <div class="detail-section mb-3">
-                        <label class="detail-label"><i class="bi bi-clock-history me-1"></i>Histórico del Caso</label:>
+                        <label class="detail-label"><i class="bi bi-clock-history me-1"></i>Tiempos del Caso</label:>
+                        <div id="detail-tiempos-container" class="mt-2">
+                            <!-- Se llena dinámicamente con JS -->
+                        </div>
+                    </div>
+                    <div class="detail-section mb-3" id="detail-cierre-datos-row" style="display:none;">
                         <div class="row g-2 mt-1">
                             <div class="col-12 col-md-6">
                                 <div class="detail-field">
-                                    <label class="detail-label"><i class1="bi bi-building me-1"></i>Contratista</label>
+                                    <label class="detail-label"><i class="bi bi-building me-1"></i>Contratista</label>
                                     <div class="detail-value" id="detail-cierre-proveedor">—</div>
                                 </div>
                             </div>
@@ -387,13 +392,13 @@
                             </div>
                             <div class="col-12 col-md-6">
                                 <div class="detail-field">
-                                    <label class="detail-label"><i class="bi%bi-calendar2-check me-1"></i>Fecha de Finalización</label>
+                                    <label class="detail-label"><i class="bi bi-calendar2-check me-1"></i>Fecha de Finalización</label>
                                     <div class="detail-value" id="detail-cierre-fecha-fin">—</div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="detail-section mb-3">
+                    <div class="detail-section mb-3" id="detail-cierre-comentario-row" style="display:none;">
                         <label class="detail-label"><i class="bi bi-chat-left-text me-1"></i>Comentario de Cierre</label>
                         <div class="detail-box" id="detail-cierre-comentario">—</div>
                     </div>
@@ -933,20 +938,128 @@
             cotizacionSection.style.display = 'none';
         }
 
-        // Mostrar histórico de cierre si está FINALIZADO
+        // Mostrar tiempos del caso (visible en todos los estados)
         const cierreSection = document.getElementById('detail-cierre-section');
         const comentarioCierre = get(['COMENTARIO_CIERRE', 'Comentario Cierre', 'comentario_cierre']);
         const fechaFinalizacion = get(['FECHA_FINALIZACION', 'Fecha Finalizacion', 'fecha_finalizacion']);
+        const fechaCreacion = get(['CREATED_AT', 'created_at', 'Created At']);
+        const fechaGestionTiempo = get(['FECHA_GESTION', 'Fecha Gestion', 'fecha_gestion']);
+
+        // Calcular tiempos por etapa
+        const tiemposContainer = document.getElementById('detail-tiempos-container');
+        tiemposContainer.innerHTML = '';
+
+        function parseDate(str) {
+            if (!str || str === '—' || str === '') return null;
+            const d = new Date(str.replace(' ', 'T'));
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        function formatDuration(ms) {
+            if (ms < 0) ms = 0;
+            const totalMin = Math.floor(ms / 60000);
+            const dias = Math.floor(totalMin / 1440);
+            const horas = Math.floor((totalMin % 1440) / 60);
+            const mins = totalMin % 60;
+            const parts = [];
+            if (dias > 0) parts.push(dias + (dias === 1 ? ' día' : ' días'));
+            if (horas > 0) parts.push(horas + (horas === 1 ? ' hora' : ' horas'));
+            if (mins > 0 && dias === 0) parts.push(mins + (mins === 1 ? ' minuto' : ' minutos'));
+            if (parts.length === 0) return '0 minutos';
+            return parts.join(', ');
+        }
+
+        function addTiempoRow(etapa, fechaInicio, fechaFin, isCurrent) {
+            const inicio = parseDate(fechaInicio);
+            const fin = fechaFin ? parseDate(fechaFin) : new Date();
+            const row = document.createElement('div');
+            row.className = 'd-flex justify-content-between align-items-center py-2 border-bottom';
+            const duracion = (inicio && fin) ? formatDuration(fin - inicio) : '—';
+            const badge = isCurrent ? '<span class="badge bg-primary ms-2">Actual</span>' : '';
+            row.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-arrow-right-short text-muted me-1"></i>
+                    <span class="fw-semibold">${etapa}</span>${badge}
+                </div>
+                <div class="text-end">
+                    <div class="text-muted small">${duracion}</div>
+                </div>
+            `;
+            tiemposContainer.appendChild(row);
+        }
+
+        const fCreacion = parseDate(fechaCreacion);
+        const fGestion = parseDate(fechaGestionTiempo);
+        const fAprobacion = parseDate(fechaAprobacion);
+        const fFinalizacion = parseDate(fechaFinalizacion);
+        const ahora = new Date();
+
+        // Determinar fecha de inicio real del caso
+        // created_at puede ser posterior a las fechas reales si se migró
+        // Usar la fecha más antigua disponible
+        let fInicio = null;
+        if (fCreacion) fInicio = fCreacion;
+        if (fGestion && (!fInicio || fGestion < fInicio)) fInicio = fGestion;
+        if (fAprobacion && (!fInicio || fAprobacion < fInicio)) fInicio = fAprobacion;
+
+        // Etapa 1: CREADO -> EN PROCESO DE COTIZACION
+        if (fInicio && fGestion) {
+            addTiempoRow('Creado → En Cotización', fInicio.toISOString().replace('T', ' ').substring(0, 19), fechaGestionTiempo, estadoUpper === 'CREADO');
+        } else if (fInicio && estadoUpper === 'CREADO') {
+            addTiempoRow('Creado → En Cotización', fInicio.toISOString().replace('T', ' ').substring(0, 19), null, true);
+        }
+
+        // Etapa 2: EN PROCESO DE COTIZACION -> EN EJECUCION
+        if (fGestion) {
+            addTiempoRow('En Cotización → En Ejecución', fechaGestionTiempo, fAprobacion ? fechaAprobacion : null, estadoUpper.includes('COTIZACION'));
+        }
+
+        // Etapa 3: EN EJECUCION -> FINALIZADO
+        if (fAprobacion) {
+            addTiempoRow('En Ejecución → Finalizado', fechaAprobacion, fFinalizacion ? fechaFinalizacion : null, estadoUpper.includes('EJECUCION'));
+        }
+
+        // Total: sumar las duraciones de las etapas completadas + etapa actual
+        const totalMs = [
+            (fInicio && fGestion) ? Math.max(0, fGestion - fInicio) : 0,
+            (fGestion && fAprobacion) ? Math.max(0, fAprobacion - fGestion) : 0,
+            (fAprobacion && fFinalizacion) ? Math.max(0, fFinalizacion - fAprobacion) : 0,
+            // Etapa actual en curso (sin fecha de fin)
+            (fInicio && !fGestion && estadoUpper === 'CREADO') ? Math.max(0, ahora - fInicio) : 0,
+            (fGestion && !fAprobacion && estadoUpper.includes('COTIZACION')) ? Math.max(0, ahora - fGestion) : 0,
+            (fAprobacion && !fFinalizacion && estadoUpper.includes('EJECUCION')) ? Math.max(0, ahora - fAprobacion) : 0,
+        ].reduce((a, b) => a + b, 0);
+
+        if (totalMs > 0) {
+            const totalRow = document.createElement('div');
+            totalRow.className = 'd-flex justify-content-between align-items-center py-2 mt-2';
+            totalRow.innerHTML = `
+                <div class="fw-bold text-primary">
+                    <i class="bi bi-stopwatch me-1"></i>Tiempo Total
+                </div>
+                <div class="fw-bold text-primary">${formatDuration(totalMs)}</div>
+            `;
+            tiemposContainer.appendChild(totalRow);
+        }
+
+        // Mostrar siempre la sección de tiempos
+        cierreSection.style.display = 'block';
+
+        // Mostrar datos de cierre solo si está FINALIZADO
+        const cierreDatosRow = document.getElementById('detail-cierre-datos-row');
+        const cierreComentarioRow = document.getElementById('detail-cierre-comentario-row');
 
         if (estadoUpper.includes('FINALIZADO')) {
-            cierreSection.style.display = 'block';
+            cierreDatosRow.style.display = 'block';
             document.getElementById('detail-cierre-proveedor').textContent = proveedor || '—';
             document.getElementById('detail-cierre-monto').textContent = monto && monto !== '—' ? '$' + parseFloat(monto).toLocaleString('es-CO') : '—';
             document.getElementById('detail-cierre-fecha-inicio').textContent = fechaAprobacion || '—';
             document.getElementById('detail-cierre-fecha-fin').textContent = fechaFinalizacion || '—';
+            cierreComentarioRow.style.display = 'block';
             document.getElementById('detail-cierre-comentario').textContent = comentarioCierre || '—';
         } else {
-            cierreSection.style.display = 'none';
+            cierreDatosRow.style.display = 'none';
+            cierreComentarioRow.style.display = 'none';
         }
     }
 
