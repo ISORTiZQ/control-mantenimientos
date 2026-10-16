@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get(
-    "SECRET_KEY", "cambiar-esta-clave-en-produccion-2026"
+    "SECRET_KEY", "sk-xyz989gbc155def450"
 )
 app.jinja_env.auto_reload = True
 app.config["TEMPLATES_AUTO_RELOAD"] = True
@@ -44,7 +44,9 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 # En producción: PostgreSQL vía DATABASE_URL
 database_url = os.environ.get("DATABASE_URL", "")
 if database_url:
-    # PostgreSQL
+    # PostgreSQL: asegurar que use psycopg2 como driver
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 else:
     # SQLite local para desarrollo
