@@ -1,0 +1,1387 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Panel de Control{% endblock %}
+
+{% block body %}
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand d-flex align-items-center" href="{{ url_for('home') }}">
+            <i class="bi bi-grid-3x3-gap-fill me-2"></i>
+            <span class="fw-semibold">Panel de Control</span>
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link active" href="{{ url_for('home') }}">
+                        <i class="bi bi-table me-1"></i>Registros
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('dashboard') }}">
+                        <i class="bi bi-bar-chart me-1"></i>Dashboard
+                    </a>
+                </li>
+            </ul>
+            <ul class="navbar-nav align-items-lg-center">
+                <li class="nav-item">
+                    <span class="nav-link text-light-opacity">
+                        <i class="bi bi-person-circle me-1"></i>{{ user }}
+                    </span>
+                </li>
+                <li class="nav-item ms-lg-2">
+                    <a class="btn btn-outline-light btn-sm rounded-3 px-3" href="{{ url_for('logout') }}">
+                        <i class="bi bi-box-arrow-right me-1"></i>Cerrar Sesión
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="container-fluid py-4 px-4">
+    <!-- Mensajes flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show rounded-3" role="alert">
+                    <i class="bi bi-info-circle me-1"></i>{{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Page Header -->
+    <div class="page-header mb-4">
+        <div class="row align-items-center">
+            <div class="col">
+                <h2 class="fw-bold text-dark mb-1">
+                    <i class="bi bi-table me-2 text-primary"></i>Datos de Servicios
+                </h2>
+                <p class="text-muted mb-0">Información cargada desde archivo Excel</p>
+            </div>
+            <div class="col-auto d-flex align-items-center gap-2">
+                <span class="badge rounded-pill px-3 py-2" id="sourceBadge" style="display:none;">
+                    <i class="bi bi-cloud-check me-1"></i><span id="sourceText">—</span>
+                </span>
+                <button class="btn btn-light btn-sm rounded-3 px-3" id="refreshBtn" onclick="refreshData()">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4" id="statsRow">
+        <div class="col-12 col-md-4">
+            <div class="stat-card card border-0 shadow-sm rounded-4">
+                <div class="card-body d-flex align-items-center">
+                    <div class="stat-icon stat-icon-blue me-3">
+                        <i class="bi bi-list-check"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small mb-0">Total Registros</p>
+                        <h3 class="fw-bold mb-0" id="totalRecords">{{ records|length }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="stat-card card border-0 shadow-sm rounded-4">
+                <div class="card-body d-flex align-items-center">
+                    <div class="stat-icon stat-icon-green me-3">
+                        <i class="bi bi-shop"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small mb-0">Tiendas Únicas</p>
+                        <h3 class="fw-bold mb-0" id="uniqueStores">—</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="stat-card card border-0 shadow-sm rounded-4">
+                <div class="card-body d-flex align-items-center">
+                    <div class="stat-icon stat-icon-purple me-3">
+                        <i class="bi bi-tags"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small mb-0">Tipos de Servicio</p>
+                        <h3 class="fw-bold mb-0" id="uniqueServices">—</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Alert -->
+    {% if error %}
+    <div class="alert alert-danger rounded-3" role="alert">
+        <i class="bi bi-exclamation-triangle me-1"></i>{{ error }}
+    </div>
+    {% endif %}
+
+    <!-- Table Card -->
+    {% if not error and records %}
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-header bg-white border-0 py-3 px-4 d-flex align-items-center justify-content-between">
+            <h5 class="mb-0 fw-semibold">
+                <i class="bi bi-table-rows me-2 text-primary"></i>Registros
+            </h5>
+            <!-- Search -->
+            <div class="input-group input-group-sm" style="width: 250px;">
+                <span class="input-group-text bg-light border-end-0">
+                    <i class="bi bi-search"></i>
+                </span>
+                <input type="text" class="form-control border-start-0" id="searchInput" 
+                       placeholder="Buscar..." onkeyup="filterTable()">
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="dataTable">
+                    <thead>
+                        <tr>
+                            <th class="ps-4" style="width: 60px;">#</th>
+                            {% for col in columns %}
+                            <th>
+                                <div class="th-filter-wrapper d-flex align-items-center justify-content-between">
+                                    <span>{{ col }}</span>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-filter dropdown-toggle" type="button" data-bs-toggle="dropdown" data-col="{{ col }}">
+                                            <i class="bi bi-funnel"></i>
+                                        </button>
+                                        <div class="dropdown-menu filter-dropdown p-2">
+                                            <input type="text" class="form-control form-control-sm filter-input mb-2" placeholder="Buscar..." data-col="{{ col }}" oninput="applyFilters()">
+                                            <div class="filter-options" data-col="{{ col }}"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in records %}
+                        {% set row_idx = loop.index0 %}
+                        <tr style="cursor: pointer;" onclick="showDetail({{ row_idx }})">
+                            <td class="ps-4 text-muted small">{{ loop.index }}</td>
+                            {% for col in columns %}
+                            <td>
+                                {% if col == 'Estado' %}
+                                    <span class="badge estado-badge estado-{{ row[col]|lower|replace(' ', '-') }} rounded-pill px-3 py-2">
+                                        {{ row[col] }}
+                                    </span>
+                                    {% if row[col]|upper in ['EN PROCESO DE COTIZACION', 'EN PROCESO'] %}
+                                    {% set fecha_g = all_records[row_idx].get('FECHA_GESTION', '') %}
+                                    {% set fecha_str = fecha_g|string %}
+                                    {% set fecha_clean = fecha_str if fecha_str and fecha_str != 'nan' and fecha_str != 'None' and fecha_str != 'NaN' and fecha_str != '' else '' %}
+                                    <div class="countdown-timer" id="countdown-{{ row_idx }}" data-fecha="{{ fecha_clean }}">
+                                        <i class="bi bi-clock-history"></i>
+                                        <span class="countdown-time">Calculando...</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if row[col]|upper == 'EN EJECUCION' %}
+                                    {% set fecha_e = all_records[row_idx].get('FECHA_APROBACION', '') %}
+                                    {% set fecha_e_str = fecha_e|string %}
+                                    {% set fecha_e_clean = fecha_e_str if fecha_e_str and fecha_e_str != 'nan' and fecha_e_str != 'None' and fecha_e_str != 'NaN' and fecha_e_str != '' else '' %}
+                                    <div class="day-counter" data-fecha="{{ fecha_e_clean }}">
+                                        <i class="bi bi-calendar-event"></i>
+                                        <span class="day-counter-text">Calculando...</span>
+                                    </div>
+                                    {% endif %}
+                                {% else %}
+                                    {{ row[col] }}
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-white border-0 py-3 px-4 d-flex align-items-center justify-content-between">
+            <p class="text-muted small mb-0">
+                Mostrando <span id="visibleCount">{{ records|length }}</span> de {{ records|length }} registros
+            </p>
+            <nav>
+                <ul class="pagination pagination-sm mb-0" id="pagination"></ul>
+            </nav>
+        </div>
+    </div>
+    {% elif not error %}
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+            <h4 class="mt-3 text-muted">No hay datos para mostrar</h4>
+            <p class="text-muted">Coloca un archivo Excel en la carpeta <code>data/</code></p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Footer -->
+<footer class="app-footer mt-auto py-3">
+    <div class="container-fluid px-4">
+        <div class="row align-items-center">
+            <div class="col-12 col-md-4 text-center text-md-start mb-2 mb-md-0">
+                <span class="footer-brand">
+                    <i class="bi bi-code-slash me-1"></i>SKYSOFT
+                </span>
+                <span class="footer-tagline d-block d-md-inline ms-md-2">Soluciones de gestión y trazabilidad</span>
+            </div>
+            <div class="col-12 col-md-4 text-center mb-2 mb-md-0">
+                <span class="footer-date">
+                    <i class="bi bi-clock-history me-1"></i>Última modificación: {{ last_modified }}
+                </span>
+            </div>
+            <div class="col-12 col-md-4 text-center text-md-end">
+                <span class="footer-copy">&copy; 2026 SKYSOFT. Todos los derechos reservados.</span>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- Modal de Detalle -->
+<div class="modal fade" id="detailModal" tabindex="-1" aria-labelledby="detailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="detailModalLabel">
+                    <i class="bi bi-file-earmark-text me-2 text-primary"></i>Detalle de Solicitud
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body px-4">
+                <!-- Grid de información -->
+                <div class="row g-3 mb-3">
+                    <div class="col-12 col-md-6">
+                        <div class="detail-field">
+                            <label class="detail-label"><i class="bi bi-hash me-1"></i>N° de OT</label>
+                            <div class="detail-value" id="detail-ot">—</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <div class="detail-field">
+                            <label class="detail-label"><i class="bi bi-shop me-1"></i>Tienda</label>
+                            <div class="detail-value" id="detail-tienda">—</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <div class="detail-field">
+                            <label class="detail-label"><i class="bi bi-tag me-1"></i>Tipo de Servicio</label>
+                            <div class="detail-value" id="detail-servicio">—</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <div class="detail-field">
+                            <label class="detail-label"><i class="bi bi-geo-alt me-1"></i>Ciudad</label>
+                            <div class="detail-value" id="detail-ciudad">—</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <div class="detail-field">
+                            <label class="detail-label"><i class="bi bi-building me-1"></i>CO</label>
+                            <div class="detail-value" id="detail-co">—</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <div class="detail-field">
+                            <label class="detail-label"><i class="bi bi-cone me-1"></i>Concepto</label>
+                            <div class="detail-value" id="detail-concepto">—</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <div class="detail-field">
+                            <label class="detail-label"><i class="bi bi-flag me-1"></i>Estado</label>
+                            <div class="detail-value" id="detail-estado">—</div>
+                            <div id="detail-countdown-container" style="display:none;">
+                                <div class="detail-countdown" id="detail-countdown">
+                                    <span class="detail-countdown-label"><i class="bi bi-clock-history me-1"></i>Tiempo restante</span>
+                                    <span class="detail-countdown-value" id="detail-countdown-value">—</span>
+                                </div>
+                            </div>
+                            <div id="detail-day-counter-container" style="display:none;">
+                                <div class="detail-day-counter" id="detail-day-counter">
+                                    <span class="detail-day-counter-label"><i class="bi bi-calendar-event me-1"></i>Días en ejecución</span>
+                                    <span class="detail-day-counter-value" id="detail-day-counter-value">—</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <div class="detail-field">
+                            <label class="detail-label"><i class="bi bi-envelope me-1"></i>Correo Tienda</label>
+                            <div class="detail-value text-break" id="detail-correo">—</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <div class="detail-field">
+                            <label class="detail-label"><i class="bi bi-map me-1"></i>Dirección Tienda</label>
+                            <div class="detail-value" id="detail-direccion">—</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Descripción -->
+                <div class="detail-section mb-3">
+                    <label class="detail-label"><i class="bi bi-chat-left-text me-1"></i>Descripción</label>
+                    <div class="detail-box" id="detail-descripcion">—</div>
+                </div>
+
+                <!-- Datos de Cotización (visible solo cuando hay cotización aprobada) -->
+                <div id="detail-cotizacion-section" style="display:none;">
+                    <div class="detail-section mb-3">
+                        <label class="detail-label"><i class="bi bi-file-earmark-text me-1"></i>Datos de la Cotización</label>
+                        <div class="row g-2 mt-1">
+                            <div class="col-12 col-md-4">
+                                <div class="detail-field">
+                                    <label class="detail-label"><i class="bi bi-building me-1"></i>Proveedor</label>
+                                    <div class="detail-value" id="detail-proveedor">—</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="detail-field">
+                                    <label class="detail-label"><i class="bi bi-calendar-check me-1"></i>Fecha de Inicio</label>
+                                    <div class="detail-value" id="detail-fecha-aprobacion">—</div>
+                                </div>
+;                           </div>
+                            <div class="col-12 col-md-4">
+                                <div class="detail-field">
+                                    <label class="detail-label"><i class="bi bi-c:urrency-dollar me-1"></i>Monto</label>
+                                    <div class="detail-value" id="detail-monto">—</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Histórico de Cierre (visible cuando estado es FINALIZADO) -->
+                <div id="detail-cierre-section" style="display:none;">
+                    <div class="detail-section mb-3">
+                        <label class="detail-label"><i class="bi bi-clock-history me-1"></i>Histórico del Caso</label:>
+                        <div class="row g-2 mt-1">
+                            <div class="col-12 col-md-6">
+                                <div class="detail-field">
+                                    <label class="detail-label"><i class1="bi bi-building me-1"></i>Contratista</label>
+                                    <div class="detail-value" id="detail-cierre-proveedor">—</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <div class="detail-field">
+                                    <label class="detail-label"><i class="bi bi-currency-dollar me-1"></i>Monto</label>
+                                    <div class="detail-value" id="detail-cierre-monto">—</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <div class="detail-field">
+                                    <label class="detail-label"><i class="bi bi-calendar-check me-1"></i>Fecha de Inicio</label>
+                                    <div class="detail-value" id="detail-cierre-fecha-inicio">—</div>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <div class="detail-field">
+                                    <label class="detail-label"><i class="bi%bi-calendar2-check me-1"></i>Fecha de Finalización</label>
+                                    <div class="detail-value" id="detail-cierre-fecha-fin">—</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="detail-section mb-3">
+                        <label class="detail-label"><i class="bi bi-chat-left-text me-1"></i>Comentario de Cierre</label>
+                        <div class="detail-box" id="detail-cierre-comentario">—</div>
+                    </div>
+                </div>
+
+                <!-- Evidencia -->
+                <div class="detail-section">
+                    <label class="detail-label"><i class="bi bi-image me-1"></i>Evidencia Fotográfica</label>
+                    <div class="d-flex align-items-center gap-2 mt-2">
+                        <a href="#" target="_blank" class="btn btn-outline-primary btn-sm rounded-3" id="detail-evidencia-btn">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>Abrir imagen
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light rounded-3 px-3" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-1"></i>Cerrar
+                </button>
+                <!-- Botón Gestionar (visible cuando estado es CREADO) -->
+                <button type="button" class="btn btn-primary rounded-3 px-3" id="btnGestionar" onclick="openGestion()">
+                    <i class="bi bi-gear me-1"></i>Gestionar
+                </button>
+                <!-- Botón Aprobar Cotización (visible cuando estado es EN PROCESO DE COTIZACION) -->
+                <button type="button" class="btn btn-success rounded-3 px-3" id="btnAprobar" onclick="openAprobar()" style="display:none;">
+                    <i class="bi bi-check-circle me-1"></i>Aprobar Cotización
+                </button>
+                <!-- Botón Finalizar (visible cuando estado es EN EJECUCION) -->
+                <button type="button" class="btn btn-danger rounded-3 px-3" id="btnFinalizar" onclick="openFinalizar()" style="display:none;">
+                    <i class="bi bi-check2-square me-1"></i>Finalizar Caso
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Gestión -->
+<div class="modal fade" id="gestionModal" tabindex="-1" aria-labelledby="gestionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="gestionModalLabel">
+                    <i class="bi bi-envelope-gear me-2 text-primary"></i>Gestionar Solicitud
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body px-4">
+                <p class="text-muted small mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Revisa el correo generado y cópialo para enviarlo al proveedor.
+                </p>
+
+                <!-- Asunto -->
+                <div class="gestion-section mb-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <label class="detail-label mb-0"><i class="bi bi-tag me-1"></i>Asunto</label>
+                        <button class="btn btn-outline-secondary btn-sm rounded-3 copy-btn" onclick="copyText('emailSubject', this)">
+                            <i class="bi bi-clipboard"></i> Copiar
+                        </button>
+                    </div>
+                    <div class="gestion-box" id="emailSubject">—</div>
+                </div>
+
+                <!-- Cuerpo -->
+                <div class="gestion-section mb-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <label class="detail-label mb-0"><i class="bi bi-file-text me-1"></i>Cuerpo del correo</label>
+                        <button class="btn btn-outline-secondary btn-sm rounded-3 copy-btn" onclick="copyText('emailBody', this)">
+                            <i class="bi bi-clipboard"></i> Copiar
+                        </button>
+                    </div>
+                    <div class="gestion-box gestion-body" id="emailBody">—</div>
+                </div>
+
+                <!-- Evidencia -->
+                <div class="gestion-section mb-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <label class="detail-label mb-0"><i class="bi bi-image me-1"></i>Evidencia</label>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <a href="#" target="_blank" class="btn btn-outline-primary btn-sm rounded-3" id="gestion-evidencia-btn">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>Abrir imagen
+                        </a>
+                        <button class="btn btn-outline-secondary btn-sm rounded-3" onclick="copyText('gestionEvidencia', this)">
+                            <i class="bi bi-clipboard me-1"></i>Copiar link
+                        </button>
+                    </div>
+                    <div class="d-none" id="gestionEvidencia"></div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0 d-flex justify-content-between">
+                <button type="button" class="btn btn-light rounded-3 px-3" data-bs-dismiss="modal">
+                    <i class="bi bi-arrow-left me-1"></i>Volver
+                </button>
+                <button type="button" class="btn btn-warning rounded-3 px-3 fw-medium" id="btnComenzarGestion" onclick="comenzarGestion()">
+                    <i class="bi bi-play-circle me-1"></i>Comenzar Cotización
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Aprobar Cotización -->
+<div class="modal fade" id="aprobarModal" tabindex="-1" aria-labelledby="aprobarModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="aprobarModalLabel">
+                    <i class="bi bi-check2-circle me-2 text-success"></i>Aprobar Cotización
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body px-4">
+                <p class="text-muted small mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Completa los datos de la cotización aprobada.
+                </p>
+
+                <form id="aprobarForm">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label fw-semibold"><i class="bi bi-building me-1"></i>Proveedor</label>
+                            <input type="text" class="form-control form-control-lg rounded-3" id="aprobarProveedor" placeholder="Nombre del proveedor" required>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold"><i class="bi bi-calendar me-1"></i>Fecha</label>
+                            <input type="date" class="form-control form-control-lg rounded-3" id="aprobarFecha" required>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold"><i class="bi bi-currency-dollar me-1"></i>Monto</label>
+                            <input type="number" step="0.01" min="0" class="form-control form-control-lg rounded-3" id="aprobarMonto" placeholder="0.00" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold"><i class="bi bi-file-earmark-pdf me-1"></i>Adjuntar PDF</label>
+                            <input type="file" class="form-control form-control-lg rounded-3" id="aprobarPDF" accept=".pdf">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light rounded-3 px-3" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-1"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-success rounded-3 px-3 fw-medium" id="btnAprobarConfirmar" onclick="confirmarAprobacion()">
+                    <i class="bi bi-check2-circle me-1"></i>Aprobar Cotización
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Finalización -->
+<div class="modal fade" id="finalizarModal" tabindex="-1" aria-labelledby="finalizarModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="finalizarModalLabel">
+                    <i class="bi bi-check2-square me-2 text-danger"></i>Finalizar Caso
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body px-4">
+                <p class="text-muted small mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Agrega un comentario de cierre para finalizar este caso.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold"><i class="bi bi-chat-left-text me-1"></i>Comentario de cierre</label>
+                    <textarea class="form-control form-control-lg rounded-3" id="finalizarComentario" rows="4" placeholder="Describe el resultado de la ejecución..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light rounded-3 px-3" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-1"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-danger rounded-3 px-3 fw-medium" id="btnFinalizarConfirmar" onclick="confirmarFinalizacion()">
+                    <i class="bi bi-check2-square me-1:"></i>Finalizar Ejecución
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Calcular estadísticas
+    function calculateStats() {
+        const table = document.getElementById('dataTable');
+        if (!table) return;
+
+        const rows = table.querySelectorAll('tbody tr');
+        const stores = new Set();
+        const services = new Set();
+
+        // cells[0] = #, cells[1] = OT, cells[2] = Tienda, cells[3] = Tipo de servicio, cells[4] = Estado
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 4) {
+                if (cells[2]) stores.add(cells[2].textContent.trim());
+                if (cells[3]) services.add(cells[3].textContent.trim());
+            }
+        });
+
+        document.getElementById('uniqueStores').textContent = stores.size;
+        document.getElementById('uniqueServices').textContent = services.size;
+    }
+
+    // Filtrar tabla (búsqueda global)
+    function filterTable() {
+        applyFilters();
+    }
+
+    // Sistema de filtros por columna + búsqueda global
+    function applyFilters() {
+        const table = document.getElementById('dataTable');
+        const rows = table.querySelectorAll('tbody tr');
+        const globalSearch = document.getElementById('searchInput');
+        const globalFilter = globalSearch ? globalSearch.value.toLowerCase() : '';
+
+        // Recolectar filtros por columna
+        const colFilters = {};
+        document.querySelectorAll('.filter-input').forEach(input => {
+            colFilters[input.dataset.col] = input.value.toLowerCase();
+        });
+
+        let visible = 0;
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            let visibleFlag = true;
+
+            // Búsqueda global
+            if (globalFilter && !row.textContent.toLowerCase().includes(globalFilter)) {
+                visibleFlag = false;
+            }
+
+            // Filtros por columna
+            if (visibleFlag) {
+                const headers = table.querySelectorAll('thead th');
+                let colIdx = 1; // saltar el #
+                for (const [colName, filterVal] of Object.entries(colFilters)) {
+                    if (!filterVal) continue;
+                    // Encontrar el índice de la columna
+                    let idx = -1;
+                    headers.forEach((th, i) => {
+                        const span = th.querySelector('span');
+                        if (span && span.textContent.trim() === colName) idx = i;
+                    });
+                    if (idx >= 0 && cells[idx]) {
+                        const cellText = cells[idx].textContent.toLowerCase();
+                        if (!cellText.includes(filterVal)) {
+                            visibleFlag = false;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            row.style.display = visibleFlag ? '' : 'none';
+            if (visibleFlag) visible++;
+        });
+
+        document.getElementById('visibleCount').textContent = visible;
+    }
+
+    // Llenar opciones únicas de cada columna al cargar
+    function initColumnFilters() {
+        const table = document.getElementById('dataTable');
+        const headers = table.querySelectorAll('thead th');
+        const rows = table.querySelectorAll('tbody tr');
+
+        headers.forEach((th, idx) => {
+            const filterBtn = th.querySelector('.btn-filter');
+            if (!filterBtn) return;
+            const colName = filterBtn.dataset.col;
+            const optionsContainer = document.querySelector('.filter-options[data-col="' + colName + '"]');
+            if (!optionsContainer) return;
+
+            // Recolectar valores únicos
+            const values = new Set();
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells[idx]) {
+                    const text = cells[idx].textContent.trim().split('\n')[0].trim();
+                    if (text) values.add(text);
+                }
+            });
+
+            // Crear checkboxes
+            const sortedValues = Array.from(values).sort();
+            sortedValues.forEach(val => {
+                const label = document.createElement('label');
+                label.className = 'filter-checkbox-item';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = true;
+                checkbox.dataset.col = colName;
+                checkbox.dataset.value = val;
+                checkbox.onchange = toggleColumnFilter;
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(' ' + val));
+                optionsContainer.appendChild(label);
+            });
+        });
+    }
+
+    // Toggle de checkbox por columna
+    function toggleColumnFilter() {
+        const table = document.getElementById('dataTable');
+        const rows = table.querySelectorAll('tbody tr');
+        const headers = table.querySelectorAll('thead th');
+
+        // Agrupar checkboxes por columna
+        const colCheckboxes = {};
+        document.querySelectorAll('.filter-options input[type="checkbox"]').forEach(cb => {
+            if (!colCheckboxes[cb.dataset.col]) colCheckboxes[cb.dataset.col] = [];
+            colCheckboxes[cb.dataset.col].push(cb);
+        });
+
+        // Aplicar filtros de texto + checkboxes
+        const globalSearch = document.getElementById('searchInput');
+        const globalFilter = globalSearch ? globalSearch.value.toLowerCase() : '';
+        const colTextFilters = {};
+        document.querySelectorAll('.filter-input').forEach(input => {
+            colTextFilters[input.dataset.col] = input.value.toLowerCase();
+        });
+
+        let visible = 0;
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            let visibleFlag = true;
+
+            // Búsqueda global
+            if (globalFilter && !row.textContent.toLowerCase().includes(globalFilter)) {
+                visibleFlag = false;
+            }
+
+            // Filtros por columna
+            if (visibleFlag) {
+                for (const [colName, checkboxes] of Object.entries(colCheckboxes)) {
+                    // Encontrar índice de la columna
+                    let idx = -1;
+                    headers.forEach((th, i) => {
+                        const span = th.querySelector('span');
+                        if (span && span.textContent.trim() === colName) idx = i;
+                    });
+                    if (idx < 0 || !cells[idx]) continue;
+
+                    const cellText = cells[idx].textContent.trim().split('\n')[0].trim();
+
+                    // Filtro de texto
+                    const textFilter = colTextFilters[colName] || '';
+                    if (textFilter && !cellText.toLowerCase().includes(textFilter)) {
+                        visibleFlag = false;
+                        break;
+                    }
+
+                    // Filtro de checkboxes
+                    const checkedValues = checkboxes.filter(cb => cb.checked).map(cb => cb.dataset.value);
+                    if (checkedValues.length > 0 && !checkedValues.includes(cellText)) {
+                        visibleFlag = false;
+                        break;
+                    }
+                }
+            }
+
+            row.style.display = visibleFlag ? '' : 'none';
+            if (visibleFlag) visible++;
+        });
+
+        document.getElementById('visibleCount').textContent = visible;
+    }
+
+    // Refrescar datos vía API
+    function refreshData() {
+        const btn = document.getElementById('refreshBtn');
+        const icon = btn.querySelector('i');
+        icon.classList.add('spin');
+        btn.disabled = true;
+
+        fetch('{{ url_for("api_data") }}')
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                location.reload();
+            })
+            .catch(err => alert('Error de conexión: ' + err))
+            .finally(() => {
+                icon.classList.remove('spin');
+                btn.disabled = false;
+            });
+    }
+
+    // Cargar indicador de fuente de datos
+    function loadSourceBadge() {
+        fetch('{{ url_for("api_status") }}')
+            .then(r => r.json())
+            .then(data => {
+                const badge = document.getElementById('sourceBadge');
+                const text = document.getElementById('sourceText');
+                if (!badge || !text) return;
+
+                if (data.onedrive_configured) {
+                    badge.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
+                    badge.style.color = '#fff';
+                    text.textContent = 'OneDrive';
+                    badge.style.display = 'inline-flex';
+                    badge.querySelector('i').className = 'bi bi-cloud-check me-1';
+                } else if (data.local_file) {
+                    badge.style.background = '#e2e8f0';
+                    badge.style.color = '#475569';
+                    text.textContent = 'Local: ' + data.local_file;
+                    badge.style.display = 'inline-flex';
+                    badge.querySelector('i').className = 'bi bi-file-earmark me-1';
+                }
+            })
+            .catch(() => {});
+    }
+
+    // Datos completos para el modal
+    const allRecords = {{ all_records | tojson }};
+
+    // Mostrar detalle en modal
+    function showDetail(index) {
+        const r = allRecords[index];
+        if (!r) return;
+
+        // Mapear campos (con fallbacks para diferentes nombres)
+        const get = (keys) => {
+            for (const k of keys) {
+                if (r[k] !== undefined && r[k] !== '' && r[k] !== null) return r[k];
+            }
+            return '—';
+        };
+
+        document.getElementById('detail-ot').textContent = get(['OT', 'Id', 'ID', 'id', 'Caso']);
+        document.getElementById('detail-tienda').textContent = get(['TIENDA', 'Tienda', 'tienda']);
+        document.getElementById('detail-servicio').textContent = get(['TIPO DE SERVICIO', 'Tipo de servicio']);
+        document.getElementById('detail-ciudad').textContent = get(['CIUDAD', 'Ciudad', 'ciudad']);
+        document.getElementById('detail-co').textContent = get(['CO', 'Co', 'co']);
+        document.getElementById('detail-concepto').textContent = get(['CONCEPTO', 'Concepto', 'concepto']);
+        document.getElementById('detail-correo').textContent = get(['CORREO TIENDA', 'Correo Tienda']);
+        document.getElementById('detail-direccion').textContent = get(['DIRECCION TIENDA', 'Direccion Tienda']);
+        document.getElementById('detail-descripcion').textContent = get(['DESCRIPCIÓN', 'DESCRIPCION', 'Descripción', 'Descripcion']);
+
+        // Estado con badge de color
+        const estado = get(['ESTADO', 'Estado', 'estado', 'Status']);
+        const estadoEl = document.getElementById('detail-estado');
+        if (estado && estado !== '—') {
+            const estadoClass = estado.toLowerCase().replace(/\s+/g, '-');
+            estadoEl.innerHTML = '<span class="badge estado-badge estado-' + estadoClass + ' rounded-pill px-3 py-2">' + estado + '</span>';
+        } else {
+            estadoEl.textContent = '—';
+        }
+
+        // Countdown en modal de detalle
+        const countdownContainer = document.getElementById('detail-countdown-container');
+        const fechaGestion = get(['FECHA_GESTION', 'Fecha Gestion', 'fecha_gestion']);
+        const estadoUpperForCountdown = (estado || '').toUpperCase();
+
+        if (fechaGestion && fechaGestion !== '—' && (estadoUpperForCountdown.includes('EN PROCESO') || estadoUpperForCountdown.includes('COTIZACION'))) {
+            countdownContainer.style.display = 'block';
+            currentDetailCountdownDate = fechaGestion;
+        } else {
+            countdownContainer.style.display = 'none';
+            currentDetailCountdownDate = null;
+        }
+
+        // Contador de días en modal (EN EJECUCION)
+        const dayCounterContainer = document.getElementById('detail-day-counter-container');
+        const fechaAprobacionForCounter = get(['FECHA_APROBACION', 'Fecha Aprobacion', 'fecha_aprobacion']);
+
+        if (estadoUpperForCountdown.includes('EJECUCION') && fechaAprobacionForCounter && fechaAprobacionForCounter !== '—') {
+            dayCounterContainer.style.display = 'block';
+            currentDetailDayCounterDate = fechaAprobacionForCounter;
+        } else {
+            dayCounterContainer.style.display = 'none';
+            currentDetailDayCounterDate = null;
+        }
+
+        // Evidencia
+        const evidencia = get(['EVIDENCIA FOTOGRAFICA', 'Evidencia Fotografica', 'Evidencia']);
+        const btn = document.getElementById('detail-evidencia-btn');
+        if (evidencia && evidencia !== '—') {
+            btn.href = evidencia;
+            btn.style.display = 'inline-flex';
+            btn.classList.remove('disabled');
+        } else {
+            btn.href = '#';
+            btn.style.display = 'none';
+        }
+
+        // Mostrar modal
+        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('detailModal'));
+        modal.show();
+
+        // Guardar índice actual para gestión
+        currentRecordIndex = index;
+
+        // Mostrar/ocultar botones según estado
+        const btnGestionar = document.getElementById('btnGestionar');
+        const btnAprobar = document.getElementById('btnAprobar');
+        const btnFinalizar = document.getElementById('btnFinalizar');
+        const estadoUpper = (estado || '').toUpperCase();
+
+        // Reset todos
+        btnGestionar.style.display = 'none';
+        btnAprobar.style.display = 'none';
+        btnFinalizar.style.display = 'none';
+
+        if (estadoUpper.includes('EJECUCION') && !estadoUpper.includes('FINALIZADO')) {
+            // EN EJECUCION: botón finalizar
+            btnFinalizar.style.display = 'inline-flex';
+        } else if (estadoUpper.includes('COTIZACION') || estadoUpper.includes('EN PROCESO')) {
+            // EN PROCESO DE COTIZACION: aprobar
+            btnAprobar.style.display = 'inline-flex';
+        } else if (!estadoUpper.includes('FINALIZADO')) {
+            // CREADO u otro: gestionar
+            btnGestionar.style.display = 'inline-flex';
+        }
+
+        // Mostrar datos de cotización si está EN EJECUCION
+        const cotizacionSection = document.getElementById('detail-cotizacion-section');
+        const proveedor = get(['PROVEEDOR', 'Proveedor', 'proveedor']);
+        const fechaAprobacion = get(['FECHA_APROBACION', 'Fecha Aprobacion', 'fecha_aprobacion']);
+        const monto = get(['MONTO', 'Monto', 'monto']);
+
+        if (estadoUpper.includes('EJECUCION') && proveedor && proveedor !== '—') {
+            cotizacionSection.style.display = 'block';
+            document.getElementById('detail-proveedor').textContent = proveedor;
+            document.getElementById('detail-fecha-aprobacion').textContent = fechaAprobacion || '—';
+            document.getElementById('detail-monto').textContent = monto !== '—' ? '$' + parseFloat(monto).toLocaleString('es-CO') : '—';
+        } else {
+            cotizacionSection.style.display = 'none';
+        }
+
+        // Mostrar histórico de cierre si está FINALIZADO
+        const cierreSection = document.getElementById('detail-cierre-section');
+        const comentarioCierre = get(['COMENTARIO_CIERRE', 'Comentario Cierre', 'comentario_cierre']);
+        const fechaFinalizacion = get(['FECHA_FINALIZACION', 'Fecha Finalizacion', 'fecha_finalizacion']);
+
+        if (estadoUpper.includes('FINALIZADO')) {
+            cierreSection.style.display = 'block';
+            document.getElementById('detail-cierre-proveedor').textContent = proveedor || '—';
+            document.getElementById('detail-cierre-monto').textContent = monto && monto !== '—' ? '$' + parseFloat(monto).toLocaleString('es-CO') : '—';
+            document.getElementById('detail-cierre-fecha-inicio').textContent = fechaAprobacion || '—';
+            document.getElementById('detail-cierre-fecha-fin').textContent = fechaFinalizacion || '—';
+            document.getElementById('detail-cierre-comentario').textContent = comentarioCierre || '—';
+        } else {
+            cierreSection.style.display = 'none';
+        }
+    }
+
+    // Índice del registro actual
+    let currentRecordIndex = null;
+
+    // Abrir modal de gestión
+    function openGestion() {
+        const r = allRecords[currentRecordIndex];
+        if (!r) return;
+
+        const get = (keys) => {
+            for (const k of keys) {
+                if (r[k] !== undefined && r[k] !== '' && r[k] !== null) return r[k];
+            }
+            return '';
+        };
+
+        const ot = get(['OT', 'Id', 'ID', 'id', 'Caso']);
+        const tienda = get(['TIENDA', 'Tienda', 'tienda']);
+        const servicio = get(['TIPO DE SERVICIO', 'Tipo de servicio']);
+        const descripcion = get(['DESCRIPCIÓN', 'DESCRIPCION', 'Descripción', 'Descripcion']);
+        const direccion = get(['DIRECCION TIENDA', 'Direccion Tienda']);
+        const evidencia = get(['EVIDENCIA FOTOGRAFICA', 'Evidencia Fotografica', 'Evidencia']);
+
+        // Generar asunto
+        const subject = `Solicitud de cotizacion de mantenimiento ${ot} ${tienda}`;
+        document.getElementById('emailSubject').textContent = subject;
+
+        // Generar cuerpo
+        const body = `Buen dia,
+
+El presente correo es para solicitar la cotizacion del servicio correspondiente a esta orden de servicio:
+- OT: ${ot}
+- Tipo de servicio: ${servicio}
+- Descripción: ${descripcion}
+
+En la tienda:
+- ${tienda}
+- ${direccion}
+
+Evidencia: ${evidencia || 'No adjunta'}
+
+Por favor, enviar cotizacion en maximo 2 dias.
+
+Quedamos atentos a tu respuesta.`;
+        document.getElementById('emailBody').textContent = body;
+
+        // Evidencia
+        const evBtn = document.getElementById('gestion-evidencia-btn');
+        const evHidden = document.getElementById('gestionEvidencia');
+        if (evidencia) {
+            evBtn.href = evidencia;
+            evBtn.style.display = 'inline-flex';
+            evHidden.textContent = evidencia;
+        } else {
+            evBtn.href = '#';
+            evBtn.style.display = 'none';
+            evHidden.textContent = '';
+        }
+
+        // Cerrar modal de detalle y abrir gestión
+        const detailModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('detailModal'));
+        detailModal.hide();
+
+        setTimeout(() => {
+            const gestionModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('gestionModal'));
+            gestionModal.show();
+        }, 300);
+    }
+
+    // Copiar texto al portapapeles
+    function copyText(elementId, btn) {
+        const el = document.getElementById(elementId);
+        const text = el.textContent || el.innerText;
+
+        navigator.clipboard.writeText(text).then(() => {
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check-lg"></i> Copiado';
+            btn.classList.add('btn-success');
+            btn.classList.remove('btn-outline-secondary');
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-outline-secondary');
+            }, 2000);
+        }).catch(() => {
+            // Fallback
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check-lg"></i> Copiado';
+            setTimeout(() => { btn.innerHTML = originalHTML; }, 2000);
+        });
+    }
+
+    // Comenzar gestión - actualizar estado a EN PROCESO
+    function comenzarGestion() {
+        const r = allRecords[currentRecordIndex];
+        if (!r) return;
+
+        const get = (keys) => {
+            for (const k of keys) {
+                if (r[k] !== undefined && r[k] !== '' && r[k] !== null) return r[k];
+            }
+            return null;
+        };
+
+        const otId = get(['OT', 'Id', 'ID', 'id', 'Caso']);
+        const btn = document.getElementById('btnComenzarGestion');
+        const originalHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-arrow-clockwise spin me-1"></i>Actualizando...';
+
+        fetch('{{ url_for("api_update_state") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ot_id: String(otId), state: 'EN PROCESO DE COTIZACION' })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error: ' + data.error);
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+                return;
+            }
+            // Éxito
+            btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Estado actualizado';
+            btn.classList.remove('btn-warning');
+            btn.classList.add('btn-success');
+
+            // Actualizar el registro en memoria
+            for (const key of ['ESTADO', 'Estado', 'estado', 'Status']) {
+                if (r[key] !== undefined) {
+                    r[key] = 'EN PROCESO';
+                }
+            }
+
+            // Recargar después de 1.5s
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        })
+        .catch(err => {
+            alert('Error de conexión: ' + err);
+            btn.disabled = false;
+            btn.innerHTML = originalHTML;
+        });
+    }
+
+    // ---- Countdown Timer ----
+    const COUNTDOWN_HOURS = 48; // 48 horas = 2 días
+    let currentDetailCountdownDate = null;
+    let currentDetailDayCounterDate = null;
+    let countdownInterval = null;
+
+    function parseFecha(fechaStr) {
+        if (!fechaStr || fechaStr === '—') return null;
+        // Formato: YYYY-MM-DD HH:MM:SS o YYYY-MM-DD
+        const d = new Date(fechaStr.replace(' ', 'T'));
+        if (isNaN(d.getTime())) return null;
+        return d;
+    }
+
+    function calcDaysElapsed(fechaStr) {
+        const startDate = parseFecha(fechaStr);
+        if (!startDate) return 0;
+
+        const now = new Date();
+        const elapsedMs = now - startDate;
+        const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+        return Math.max(0, elapsedDays);
+    }
+
+    function calcTimeRemaining(fechaStr) {
+        const startDate = parseFecha(fechaStr);
+        if (!startDate) return null;
+
+        const now = new Date();
+        const elapsed = (now - startDate) / 1000; // segundos
+        const total = COUNTDOWN_HOURS * 3600; // 48h en segundos
+        const remaining = total - elapsed;
+
+        if (remaining <= 0) {
+            return { expired: true, hours: 0, minutes: 0, seconds: 0, percent: 100 };
+        }
+
+        const hours = Math.floor(remaining / 3600);
+        const minutes = Math.floor((remaining % 3600) / 60);
+        const seconds = Math.floor(remaining % 60);
+        const percent = (elapsed / total) * 100;
+
+        return { expired: false, hours, minutes, seconds, percent };
+    }
+
+    function formatCountdown(info) {
+        if (info.expired) return 'TIEMPO AGOTADO';
+        const h = String(info.hours).padStart(2, '0');
+        const m = String(info.minutes).padStart(2, '0');
+        const s = String(info.seconds).padStart(2, '0');
+        return h + ':' + m + ':' + s;
+    }
+
+    function updateAllCountdowns() {
+        // Countdowns en la tabla (48h)
+        document.querySelectorAll('.countdown-timer').forEach(el => {
+            const fecha = el.dataset.fecha;
+            if (!fecha) {
+                el.style.display = 'none';
+                return;
+            }
+
+            const info = calcTimeRemaining(fecha);
+            if (!info) {
+                el.style.display = 'none';
+                return;
+            }
+
+            const timeSpan = el.querySelector('.countdown-time');
+            timeSpan.textContent = formatCountdown(info);
+
+            // Clases de urgencia
+            el.classList.remove('countdown-warning', 'countdown-danger', 'countdown-expired');
+            if (info.expired) {
+                el.classList.add('countdown-expired');
+            } else if (info.percent >= 75) {
+                el.classList.add('countdown-danger');
+            } else if (info.percent >= 50) {
+                el.classList.add('countdown-warning');
+            }
+        });
+
+        // Contador de días en la tabla (EN EJECUCION)
+        document.querySelectorAll('.day-counter').forEach(el => {
+            const fecha = el.dataset.fecha;
+            if (!fecha) {
+                el.style.display = 'none';
+                return;
+            }
+
+            const days = calcDaysElapsed(fecha);
+            const textSpan = el.querySelector('.day-counter-text');
+            textSpan.textContent = days === 1 ? '1 día' : days + ' días';
+        });
+
+        // Countdown en modal de detalle (48h)
+        if (currentDetailCountdownDate) {
+            const info = calcTimeRemaining(currentDetailCountdownDate);
+            if (info) {
+                const valueEl = document.getElementById('detail-countdown-value');
+                const containerEl = document.getElementById('detail-countdown');
+                valueEl.textContent = formatCountdown(info);
+                containerEl.classList.remove('countdown-danger');
+                if (info.expired || info.percent >= 75) {
+                    containerEl.classList.add('countdown-danger');
+                }
+            }
+        }
+
+        // Contador de días en modal de detalle (EN EJECUCION)
+        if (currentDetailDayCounterDate) {
+            const days = calcDaysElapsed(currentDetailDayCounterDate);
+            const valueEl = document.getElementById('detail-day-counter-value');
+            valueEl.textContent = days === 1 ? '1 día' : days + ' días';
+        }
+    }
+
+    // Abrir modal de aprobar cotización
+    function openAprobar() {
+        const r = allRecords[currentRecordIndex];
+        if (!r) return;
+
+        // Pre-llenar fecha con hoy
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('aprobarFecha').value = today;
+
+        // Limpiar campos
+        document.getElementById('aprobarProveedor').value = '';
+        document.getElementById('aprobarMonto').value = '';
+        document.getElementById('aprobarPDF').value = '';
+
+        // Cerrar modal de detalle y abrir aprobar
+        const detailModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('detailModal'));
+        detailModal.hide();
+
+        setTimeout(() => {
+            const aprobarModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('aprobarModal'));
+            aprobarModal.show();
+        }, 300);
+    }
+
+    // Confirmar aprobación de cotización
+    function confirmarAprobacion() {
+        const r = allRecords[currentRecordIndex];
+        if (!r) return;
+
+        const get = (keys) => {
+            for (const k of keys) {
+                if (r[k] !== undefined && r[k] !== '' && r[k] !== null) return r[k];
+            }
+            return null;
+        };
+
+        const otId = get(['OT', 'Id', 'ID', 'id', 'Caso']);
+        const proveedor = document.getElementById('aprobarProveedor').value.trim();
+        const fecha = document.getElementById('aprobarFecha').value;
+        const monto = document.getElementById('aprobarMonto').value;
+        const pdfFile = document.getElementById('aprobarPDF').files[0];
+
+        // Validar
+        if (!proveedor || !fecha || !monto) {
+            alert('Por favor completa todos los campos obligatorios.');
+            return;
+        }
+
+        const btn = document.getElementById('btnAprobarConfirmar');
+        const originalHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-arrow-clockwise spin me-1"></i>Guardando...';
+
+        // Preparar datos (sin el PDF, que se maneja separado)
+        const payload = {
+            ot_id: String(otId),
+            state: 'EN EJECUCION',
+            proveedor: proveedor,
+            fecha_aprobacion: fecha,
+            monto: parseFloat(monto),
+            pdf_nombre: pdfFile ? pdfFile.name : ''
+        };
+
+        fetch('{{ url_for("api_aprobar") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error: ' + data.error);
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+                return;
+            }
+            // Éxito
+            btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Aprobado';
+            setTimeout(() => { location.reload(); }, 1500);
+        })
+        .catch(err => {
+            alert('Error de conexión: ' + err);
+            btn.disabled = false;
+            btn.innerHTML = originalHTML;
+        });
+    }
+
+    // Abrir modal de finalización
+    function openFinalizar() {
+        // Limpiar campo
+        document.getElementById('finalizarComentario').value = '';
+
+        // Cerrar modal de detalle y abrir finalizar
+        const detailModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('detailModal'));
+        detailModal.hide();
+
+        setTimeout(() => {
+            const finalizarModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('finalizarModal'));
+            finalizarModal.show();
+        }, 300);
+    }
+
+    // Confirmar finalización
+    function confirmarFinalizacion() {
+        const r = allRecords[currentRecordIndex];
+        if (!r) return;
+
+        const get = (keys) => {
+            for (const k of keys) {
+                if (r[k] !== undefined && r[k] !== '' && r[k] !== null) return r[k];
+            }
+            return null;
+        };
+
+        const otId = get(['OT', 'Id', 'ID', 'id', 'Caso']);
+        const comentario = document.getElementById('finalizarComentario').value.trim();
+
+        // Alerta de confirmación
+        if (!confirm('¿Está seguro de que desea finalizar este caso?\n\nEsta acción no se puede deshacer.')) {
+            return;
+        }
+
+        const btn = document.getElementById('btnFinalizarConfirmar');
+        const originalHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-arrow-clockwise spin me-1"></i>Finalizando...';
+
+        fetch('{{ url_for("api_finalizar") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ot_id: String(otId),
+                comentario: comentario
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error: ' + data.error);
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+                return;
+            }
+            // Éxito
+            btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Caso Finalizado';
+            btn.classList.remove('btn-danger');
+            btn.classList.add('btn-success');
+            setTimeout(() => { location.reload(); }, 1500);
+        })
+        .catch(err => {
+            alert('Error de conexión: ' + err);
+            btn.disabled = false;
+            btn.innerHTML = originalHTML;
+        });
+    }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', function() {
+        calculateStats();
+        loadSourceBadge();
+        updateAllCountdowns();
+        initColumnFilters();
+        countdownInterval = setInterval(updateAllCountdowns, 1000);
+    });
+</script>
+{% endblock %}

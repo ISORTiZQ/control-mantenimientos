@@ -1,0 +1,609 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Panel de Control{% endblock %}
+
+{% block head %}
+{{ super() }}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block body %}
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark sticky-top">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand d-flex align-items-center" href="{{ url_for('home') }}">
+            <i class="bi bi-grid-3x3-gap-fill me-2"></i>
+            <span class="fw-semibold">Panel de Control</span>
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('home') }}">
+                        <i class="bi bi-table me-1"></i>Registros
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" href="{{ url_for('dashboard') }}">
+                        <i class="bi bi-bar-chart me-1"></i>Dashboard
+                    </a>
+                </li>
+            </ul>
+            <ul class="navbar-nav align-items-lg-center">
+                <li class="nav-item">
+                    <span class="nav-link text-light-opacity">
+                        <i class="bi bi-person-circle me-1"></i>{{ user }}
+                    </span>
+                </li>
+                <li class="nav-item ms-lg-2">
+                    <a class="btn btn-outline-light btn-sm rounded-3 px-3" href="{{ url_for('logout') }}">
+                        <i class="bi bi-box-arrow-right me-1"></i>Cerrar Sesión
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<div class="container-fluid py-4 px-4">
+    <!-- Header -->
+    <div class="page-header mb-4">
+        <h2 class="fw-bold text-dark mb-1">
+            <i class="bi bi-bar-chart-line me-2 text-primary"></i>Dashboard de Gestión
+        </h2>
+        <p class="text-muted mb-0">Métricas, gráficas y estadísticas de solicitudes</p>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger rounded-3" role="alert">
+        <i class="bi bi-exclamation-triangle me-1"></i>{{ error }}
+    </div>
+    {% else %}
+
+    <!-- Filtros -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-4">
+            <h6 class="fw-semibold mb-3"><i class="bi bi-funnel me-2 text-primary"></i>Filtros</h6>
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-md-3">
+                    <label class="form-label small fw-semibold">Fecha Inicio</label>
+                    <input type="date" class="form-control rounded-3" id="filterFechaInicio">
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label small fw-semibold">Fecha Fin</label>
+                    <input type="date" class="form-control rounded-3" id="filterFechaFin">
+                </div>
+                <div class="col-12 col-md-3">
+                    <label class="form-label small fw-semibold">Contratista</label>
+                    <select class="form-control rounded-3" id="filterContratista">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-3">
+                    <button class="btn btn-primary rounded-3 w-100" onclick="applyDashboardFilters()">
+                        <i class="bi bi-funnel me-1"></i>Aplicar Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="stat-card card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="stat-icon stat-icon-blue me-3">
+                        <i class="bi bi-clipboard-data"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small mb-0">Total Casos</p>
+                        <h3 class="fw-bold mb-0" id="statTotalCasos">0</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="stat-icon stat-icon-green me-3">
+                        <i class="bi bi-check2-circle"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small mb-0">Casos Finalizados</p>
+                        <h3 class="fw-bold mb-0" id="statFinalizados">0</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="stat-icon stat-icon-purple me-3">
+                        <i class="bi bi-currency-dollar"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small mb-0">Monto Total</p>
+                        <h3 class="fw-bold mb-0" id="statMontoTotal">$0</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="stat-card card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="stat-icon stat-icon-yellow me-3">
+                        <i class="bi bi-clock-history"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small mb-0">Tiempo Promedio</p>
+                        <h3 class="fw-bold mb-0" id="statTiempoProm">0 días</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficas -->
+    <div class="row g-3 mb-4">
+        <!-- Torta de Estados -->
+        <div class="col-12 col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-0 py-3 px-4">
+                    <h6 class="mb-0 fw-semibold"><i class="bi bi-pie-chart me-2 text-primary"></i>Distribución de Estados</h6>
+                </div>
+                <div class="card-body d-flex justify-content-center align-items-center" style="min-height: 320px;">
+                    <canvas id="chartEstados"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Tipos de Servicio -->
+        <div class="col-12 col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-0 py-3 px-4">
+                    <h6 class="mb-0 fw-semibold"><i class="bi bi-bar-chart me-2 text-primary"></i>Top Tipos de Servicio</h6>
+                </div>
+                <div class="card-body" style="min-height: 320px;">
+                    <canvas id="chartTopServicios"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <!-- Top Tiendas -->
+        <div class="col-12 col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-0 py-3 px-4">
+                    <h6 class="mb-0 fw-semibold"><i class="bi bi-shop me-2 text-primary"></i>Top Tiendas con más Solicitudes</h6>
+                </div>
+                <div class="card-body" style="min-height: 320px;">
+                    <canvas id="chartTopTiendas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla de Contratistas -->
+        <div class="col-12 col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-0 py-3 px-4">
+                    <h6 class="mb-0 fw-semibold"><i class="bi bi-building me-2 text-primary"></i>Resumen por Contratista</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="tableContratistas">
+                            <thead>
+                                <tr>
+                                    <th class="ps-4">Contratista</th>
+                                    <th class="text-center">Casos</th>
+                                    <th class="text-center">Finalizados</th>
+                                    <th class="text-center">Activos</th>
+                                    <th class="text-end pe-4">Monto Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyContratistas">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tiempos de Gestión -->
+    <div class="row g-3 mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-header bg-white border-0 py-3 px-4">
+                    <h6 class="mb-0 fw-semibold"><i class="bi bi-clock-history me-2 text-primary"></i>Tiempos de Gestión por Caso</h6>
+                </div>
+                <div class="card-body" style="min-height: 300px;">
+                    <canvas id="chartTiempos"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% endif %}
+</div>
+
+<!-- Footer -->
+<footer class="app-footer mt-auto py-3">
+    <div class="container-fluid px-4">
+        <div class="row align-items-center">
+            <div class="col-12 col-md-4 text-center text-md-start mb-2 mb-md-0">
+                <span class="footer-brand">
+                    <i class="bi bi-code-slash me-1"></i>SKYSOFT
+                </span>
+                <span class="footer-tagline d-block d-md-inline ms-md-2">Soluciones de gestión y trazabilidad</span>
+            </div>
+            <div class="col-12 col-md-4 text-center mb-2 mb-md-0">
+                <span class="footer-date">
+                    <i class="bi bi-clock-history me-1"></i>Última modificación: {{ last_modified }}
+                </span>
+            </div>
+            <div class="col-12 col-md-4 text-center text-md-end">
+                <span class="footer-copy">&copy; 2026 SKYSOFT. Todos los derechos reservados.</span>
+            </div>
+        </div>
+    </div>
+</footer>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Datos completos
+    const allData = {{ all_records | tojson }};
+    let filteredData = [...allData];
+    let chartEstados = null;
+    let chartTopServicios = null;
+    let chartTopTiendas = null;
+    let chartTiempos = null;
+
+    // Helpers
+    function getField(record, keys) {
+        for (const k of keys) {
+            if (record[k] !== undefined && record[k] !== '' && record[k] !== null && String(record[k]) !== 'nan') return record[k];
+        }
+        return '';
+    }
+
+    function parseDate(str) {
+        if (!str) return null;
+        // Intentar formatos: YYYY-MM-DD, DD/MM/YYYY, YYYY-MM-DD HH:MM:SS
+        let d = new Date(str);
+        if (isNaN(d.getTime())) {
+            // Intentar DD/MM/YYYY
+            const parts = str.split('/');
+            if (parts.length === 3) {
+                d = new Date(parts[2], parts[1] - 1, parts[0]);
+            }
+        }
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    function daysBetween(start, end) {
+        if (!start || !end) return 0;
+        const s = parseDate(start);
+        const e = parseDate(end);
+        if (!s || !e) return 0;
+        return Math.max(0, Math.round((e - s) / (1000 * 60 * 60 * 24)));
+    }
+
+    function formatCurrency(val) {
+        const num = parseFloat(val);
+        if (isNaN(num)) return '$0';
+        return '$' + num.toLocaleString('es-CO');
+    }
+
+    // Llenar filtro de contratistas
+    function initContratistaFilter() {
+        const select = document.getElementById('filterContratista');
+        const contratistas = new Set();
+        allData.forEach(r => {
+            const p = getField(r, ['PROVEEDOR', 'Proveedor', 'proveedor']);
+            if (p) contratistas.add(p);
+        });
+        Array.from(contratistas).sort().forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c;
+            opt.textContent = c;
+            select.appendChild(opt);
+        });
+    }
+
+    // Aplicar filtros
+    function applyDashboardFilters() {
+        const fechaInicio = document.getElementById('filterFechaInicio').value;
+        const fechaFin = document.getElementById('filterFechaFin').value;
+        const contratista = document.getElementById('filterContratista').value;
+
+        filteredData = allData.filter(r => {
+            // Filtro contratista
+            if (contratista) {
+                const p = getField(r, ['PROVEEDOR', 'Proveedor', 'proveedor']);
+                if (p !== contratista) return false;
+            }
+
+            // Filtro fechas (usar Completion time o Start time)
+            const fechaCaso = getField(r, ['Completion time', 'Start time', 'FECHA_APROBACION', 'FECHA_GESTION']);
+            if (fechaInicio || fechaFin) {
+                const d = parseDate(fechaCaso);
+                if (!d) return false;
+                if (fechaInicio) {
+                    const fi = parseDate(fechaInicio);
+                    if (d < fi) return false;
+                }
+                if (fechaFin) {
+                    const ff = parseDate(fechaFin);
+                    if (d > ff) return false;
+                }
+            }
+
+            return true;
+        });
+
+        renderDashboard();
+    }
+
+    // Renderizar todo el dashboard
+    function renderDashboard() {
+        renderStats();
+        renderChartEstados();
+        renderChartTopServicios();
+        renderChartTopTiendas();
+        renderTableContratistas();
+        renderChartTiempos();
+    }
+
+    // Stats cards
+    function renderStats() {
+        const total = filteredData.length;
+        const finalizados = filteredData.filter(r => {
+            const e = getField(r, ['ESTADO', 'Estado', 'estado']);
+            return e.toUpperCase().includes('FINALIZADO');
+        }).length;
+
+        let montoTotal = 0;
+        filteredData.forEach(r => {
+            const m = parseFloat(getField(r, ['MONTO', 'Monto', 'monto']));
+            if (!isNaN(m)) montoTotal += m;
+        });
+
+        // Tiempo promedio (fecha inicio a finalización)
+        let totalDias = 0;
+        let casosConTiempo = 0;
+        filteredData.forEach(r => {
+            const inicio = getField(r, ['FECHA_APROBACION', 'Fecha Aprobacion', 'fecha_aprobacion']);
+            const fin = getField(r, ['FECHA_FINALIZACION', 'Fecha Finalizacion', 'fecha_finalizacion']);
+            if (inicio && fin) {
+                totalDias += daysBetween(inicio, fin);
+                casosConTiempo++;
+            }
+        });
+        const promDias = casosConTiempo > 0 ? Math.round(totalDias / casosConTiempo) : 0;
+
+        document.getElementById('statTotalCasos').textContent = total;
+        document.getElementById('statFinalizados').textContent = finalizados;
+        document.getElementById('statMontoTotal').textContent = formatCurrency(montoTotal);
+        document.getElementById('statTiempoProm').textContent = promDias + ' días';
+    }
+
+    // Gráfica de torta: Estados
+    function renderChartEstados() {
+        const ctx = document.getElementById('chartEstados').getContext('2d');
+        const conteo = {};
+        filteredData.forEach(r => {
+            let e = getField(r, ['ESTADO', 'Estado', 'estado']) || 'SIN ESTADO';
+            e = e.trim().split('\n')[0].trim();
+            conteo[e] = (conteo[e] || 0) + 1;
+        });
+
+        const labels = Object.keys(conteo);
+        const data = Object.values(conteo);
+        const colors = {
+            'CREADO': '#3b82f6',
+            'EN PROCESO DE COTIZACION': '#f59e0b',
+            'EN EJECUCION': '#06b6d4',
+            'FINALIZADO': '#22c55e',
+        };
+        const bgColors = labels.map(l => colors[l] || '#94a3b8');
+
+        if (chartEstados) chartEstados.destroy();
+        chartEstados = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: labels.map((l, i) => l + ' (' + data[i] + ')'),
+                datasets: [{
+                    data: data,
+                    backgroundColor: bgColors,
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { padding: 15, font: { size: 12 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                return ctx.label + ': ' + ctx.parsed + ' casos';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Gráfica: Top Tipos de Servicio
+    function renderChartTopServicios() {
+        const ctx = document.getElementById('chartTopServicios').getContext('2d');
+        const conteo = {};
+        filteredData.forEach(r => {
+            const s = getField(r, ['TIPO DE SERVICIO', 'Tipo de servicio']) || 'Sin tipo';
+            const clean = s.trim();
+            conteo[clean] = (conteo[clean] || 0) + 1;
+        });
+
+        const entries = Object.entries(conteo).sort((a, b) => b[1] - a[1]);
+        const labels = entries.map(e => e[0]);
+        const data = entries.map(e => e[1]);
+
+        if (chartTopServicios) chartTopServicios.destroy();
+        chartTopServicios = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Número de solicitudes',
+                    data: data,
+                    backgroundColor: '#4f46e5',
+                    borderRadius: 8,
+                    borderSkipped: false
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { beginAtZero: true, ticks: { precision: 0 } }
+                }
+            }
+        });
+    }
+
+    // Gráfica: Top Tiendas
+    function renderChartTopTiendas() {
+        const ctx = document.getElementById('chartTopTiendas').getContext('2d');
+        const conteo = {};
+        filteredData.forEach(r => {
+            const t = getField(r, ['TIENDA', 'Tienda', 'tienda']) || 'Sin tienda';
+            const clean = t.trim();
+            conteo[clean] = (conteo[clean] || 0) + 1;
+        });
+
+        const entries = Object.entries(conteo).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const labels = entries.map(e => e[0]);
+        const data = entries.map(e => e[1]);
+
+        if (chartTopTiendas) chartTopTiendas.destroy();
+        chartTopTiendas = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Solicitudes',
+                    data: data,
+                    backgroundColor: '#06b6d4',
+                    borderRadius: 8,
+                    borderSkipped: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { precision: 0 } }
+                }
+            }
+        });
+    }
+
+    // Tabla de Contratistas
+    function renderTableContratistas() {
+        const tbody = document.getElementById('tbodyContratistas');
+        tbody.innerHTML = '';
+
+        const contratistas = {};
+        filteredData.forEach(r => {
+            const p = getField(r, ['PROVEEDOR', 'Proveedor', 'proveedor']);
+            if (!p) return;
+            if (!contratistas[p]) contratistas[p] = { casos: 0, finalizados: 0, activos: 0, monto: 0 };
+            contratistas[p].casos++;
+            const e = getField(r, ['ESTADO', 'Estado', 'estado']).toUpperCase();
+            if (e.includes('FINALIZADO')) contratistas[p].finalizados++;
+            else contratistas[p].activos++;
+            const m = parseFloat(getField(r, ['MONTO', 'Monto', 'monto']));
+            if (!isNaN(m)) contratistas[p].monto += m;
+        });
+
+        const entries = Object.entries(contratistas).sort((a, b) => b[1].casos - a[1].casos);
+        if (entries.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No hay datos de contratistas</td></tr>';
+            return;
+        }
+
+        entries.forEach(([nombre, data]) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="ps-4 fw-medium">${nombre}</td>
+                <td class="text-center">${data.casos}</td>
+                <td class="text-center"><span class="badge bg-success rounded-pill px-2">${data.finalizados}</span></td>
+                <td class="text-center"><span class="badge bg-warning rounded-pill px-2">${data.activos}</span></td>
+                <td class="text-end pe-4 fw-semibold">${formatCurrency(data.monto)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Gráfica: Tiempos de Gestión
+    function renderChartTiempos() {
+        const ctx = document.getElementById('chartTiempos').getContext('2d');
+        const labels = [];
+        const data = [];
+
+        filteredData.forEach(r => {
+            const inicio = getField(r, ['FECHA_APROBACION', 'Fecha Aprobacion', 'fecha_aprobacion']);
+            const fin = getField(r, ['FECHA_FINALIZACION', 'Fecha Finalizacion', 'fecha_finalizacion']);
+            if (inicio && fin) {
+                const ot = getField(r, ['OT', 'Id', 'ID', 'id', 'Caso']);
+                labels.push('OT-' + ot);
+                data.push(daysBetween(inicio, fin));
+            }
+        });
+
+        if (chartTiempos) chartTiempos.destroy();
+        chartTiempos = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Días de gestión',
+                    data: data,
+                    backgroundColor: data.map(d => d > 5 ? '#ef4444' : d > 2 ? '#f59e0b' : '#22c55e'),
+                    borderRadius: 8,
+                    borderSkipped: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Días' } }
+                }
+            }
+        });
+    }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', function() {
+        initContratistaFilter();
+        renderDashboard();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: panel-mantenimiento
+    runtime: python
+    buildCommand: pip install -r requirements-prod.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WEBHOOK_TOKEN
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false  # Se configura manualmente con la URL de Neon
